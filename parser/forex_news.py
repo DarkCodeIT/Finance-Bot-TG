@@ -10,8 +10,23 @@ async def get_data(url: str):
 	data = {}
 
 	async with aiohttp.ClientSession() as session:
-		async with session.get(url=url, headers=headers):
-			pass
+		async with session.get(url=url, headers=headers) as response:
+			soup = bs4.BeautifulSoup(await response.text(), "lxml")
+			main = soup.find("div", class_="flex flex-col").find("div", class_="w-full md:mx-auto md:w-[764px]").find(
+				"div", class_="article_WYSIWYG__O0uhw article_articlePage__UMz3q text-[18px] leading-8"
+			)
+
+			#Try find link to video
+			if main.find("div", class_="outerEleWrapper"):
+				video_url = main.find("div", class_="outerEleWrapper").find("source").get("src")
+				print(video_url)
+
+			elif main.find_all("p"):
+				text = main.find_all("p")
+
+				for item in text :
+					print(item.text())
+			
 
 
 async def middle_pagination(midle_url: str) -> list:
@@ -48,6 +63,7 @@ async def main_pagination(main_url: str) -> list:
 			for item in range(2, len(tag_a)):
 				link = f"https://ru.investing.com/{tag_a[item].get("href")}"
 				main_tasks.append(asyncio.create_task(middle_pagination(middle_url=link)))
+
 	print("Main Pagination complete")
 	return main_tasks
-asyncio.run(middle_pagination("https://ru.investing.com/analysis/forex/1"))
+asyncio.run(get_data(url="https://ru.investing.com/analysis/article-200313191"))
