@@ -8,54 +8,62 @@ headers = {
 
 async def get_data(url: str):
 
-	async with aiohttp.ClientSession() as session:
-		async with session.get(url=url, headers=headers) as response:
-			soup = bs4.BeautifulSoup(await response.text(), "lxml")
-			main = soup.find("div", class_="flex flex-col").find("div", class_="w-full md:mx-auto md:w-[764px]").find(
-				"div", class_="article_WYSIWYG__O0uhw article_articlePage__UMz3q text-[18px] leading-8"
-			)
+	try:
 
-			#Try find link to video
-			if main.find("div", class_="outerEleWrapper"):
-				video_url = main.find("div", class_="outerEleWrapper").find("source").get("src")
+		async with aiohttp.ClientSession() as session:
+			async with session.get(url=url, headers=headers) as response:
+				soup = bs4.BeautifulSoup(await response.text(), "lxml")
+				main = soup.find("div", class_="flex flex-col").find("div", class_="w-full md:mx-auto md:w-[764px]").find(
+					"div", class_="article_WYSIWYG__O0uhw article_articlePage__UMz3q text-[18px] leading-8"
+				)
 
-			if main.find_all("p"):
-				code = main.find_all("p")
-				text = ""
+				#Try find link to video
+				#Url by default
+				video_url = None
+				if main.find("div", class_="outerEleWrapper"):
+					video_url = main.find("div", class_="outerEleWrapper").find("source").get("src")
 
-				for item in code :
-					text += f"{item.text}\n"
+				text = None
+				if main.find_all("p"):
+					code = main.find_all("p")
+					text = ""
 
-			#author
-			author = soup.find("div", class_="flex flex-col").find("div", class_="text-lg font-semibold leading-7 text-[#181C21]").find('a').text
+					for item in code :
+						text += f"{item.text}\n"
 
-			date = soup.find("div", class_="flex flex-col").find("div", class_="mt-2 flex flex-col gap-2 text-xs md:mt-2.5 md:gap-2.5").text
-			
-			data = {
-				"author" : author,
-				"text" : text,
-				"video_link" : video_url,
-				"link" : url,
-				"date" : date
-			}
-			return data
+				#author
+				author = soup.find("div", class_="flex flex-col").find("div", class_="text-lg font-semibold leading-7 text-[#181C21]").find('a').text
 
+				date = soup.find("div", class_="flex flex-col").find("div", class_="mt-2 flex flex-col gap-2 text-xs md:mt-2.5 md:gap-2.5").text
+				
+				data = {
+					"author" : author,
+					"text" : text,
+					"video_link" : video_url,
+					"link" : url,
+					"date" : date
+				}
+				return data
+	except Exception as ex:
+		print(ex)
 
-async def middle_pagination(middle_url: str) -> list:
-	middle_tasks = []
+middle_tasks = []
+async def middle_pagination(middle_url: str) -> None:
 
-	async with aiohttp.ClientSession() as session:
-		async with session.get(url=middle_url, headers=headers) as response:
-			
-			soup = bs4.BeautifulSoup(await response.text(), "lxml")
+	try:
+		async with aiohttp.ClientSession() as session:
+			async with session.get(url=middle_url, headers=headers) as response:
+				
+				soup = bs4.BeautifulSoup(await response.text(), "lxml")
 
-			tag_div = soup.find("div", id="contentSection").find_all("div", class_="textDiv")
+				tag_div = soup.find("div", id="contentSection").find_all("div", class_="textDiv")
 
-			for item in tag_div:
-				link = f"https://ru.investing.com/{item.find("a", class_="title").get("href")}"
-				middle_tasks.append(asyncio.create_task(get_data(url=link)))
-			
-			return middle_tasks
+				for item in tag_div:
+					link = f"https://ru.investing.com/{item.find("a", class_="title").get("href")}"
+					middle_tasks.append(asyncio.create_task(get_data(url=link)))
+				print("Middle pagination complete")
+	except Exception as ex:
+		print(ex)
 
 
 async def main_pagination(main_url: str) -> list:
@@ -77,11 +85,15 @@ async def main_pagination(main_url: str) -> list:
 			for item in range(2, len(tag_a)):
 				link = f"https://ru.investing.com/{tag_a[item].get("href")}"
 				main_tasks.append(asyncio.create_task(middle_pagination(middle_url=link)))
+				
 
 	print("Main Pagination complete")
 	return main_tasks
 
+async def run_script() -> None:
+	run_main = await main_pagination(main_url="https://ru.investing.com/analysis/forex/2")
+	asyncio.gather(*run_main)
+	print("Middle tasks -->")
 
-run_main = asyncio.run(main_pagination(main_url="https://ru.investing.com/analysis/forex"))
-run_middle = tuple(asyncio.gather(*run_main))
-# # run_get_data = asyncio.gather(*run_middle)
+if __name__ == "__main__":
+	asyncio.run(run_script())
