@@ -1,4 +1,4 @@
-import aiohttp, lxml, bs4, asyncio
+import aiohttp, lxml, bs4, asyncio, time
 
 #Добавил заголовки, иначе выдает ошибку 403 forbiden
 headers = {
@@ -6,12 +6,14 @@ headers = {
 	"User-Agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 }
 
+all_data = {"content" : []}
+
 async def get_data(url: str):
-
+	
 	try:
-
+		print("Get data start")
 		async with aiohttp.ClientSession() as session:
-			async with session.get(url=url, headers=headers) as response:
+			async with await session.get(url=url, headers=headers) as response:
 				soup = bs4.BeautifulSoup(await response.text(), "lxml")
 				main = soup.find("div", class_="flex flex-col").find("div", class_="w-full md:mx-auto md:w-[764px]").find(
 					"div", class_="article_WYSIWYG__O0uhw article_articlePage__UMz3q text-[18px] leading-8"
@@ -40,10 +42,13 @@ async def get_data(url: str):
 					"author" : author,
 					"text" : text,
 					"video_link" : video_url,
-					"link" : url,
+					"linkS" : url,
 					"date" : date
 				}
-				return data
+				
+				all_data["content"].append(data)
+				print("get_data complete")
+
 	except Exception as ex:
 		print(ex)
 
@@ -51,8 +56,9 @@ middle_tasks = []
 async def middle_pagination(middle_url: str) -> None:
 
 	try:
+		print("Middle start")
 		async with aiohttp.ClientSession() as session:
-			async with session.get(url=middle_url, headers=headers) as response:
+			async with await session.get(url=middle_url, headers=headers) as response:
 				
 				soup = bs4.BeautifulSoup(await response.text(), "lxml")
 
@@ -60,40 +66,47 @@ async def middle_pagination(middle_url: str) -> None:
 
 				for item in tag_div:
 					link = f"https://ru.investing.com/{item.find("a", class_="title").get("href")}"
-					middle_tasks.append(asyncio.create_task(get_data(url=link)))
-				print("Middle pagination complete")
-	except Exception as ex:
-		print(ex)
+					middle_tasks.append(get_data(url=link))
+				print("Middle complete")
+	except RuntimeError as ex:
+		pass
 
 
 async def main_pagination(main_url: str) -> list:
 	main_tasks = []
+	print("Main start")
+	try:
+		async with aiohttp.ClientSession() as session:
+			async with await session.get(url=main_url, headers=headers) as response:
 
-	async with aiohttp.ClientSession() as session:
-		async with session.get(url=main_url, headers=headers) as response:
+				soup = bs4.BeautifulSoup(await response.text(), "lxml")
+				tag_a = soup.find(
+					"div",
+					id="paginationWrap"
+				).find(
+					"div", class_="midDiv inlineblock"
+				).find_all("a")
 
-			soup = bs4.BeautifulSoup(await response.text(), "lxml")
-			tag_a = soup.find(
-				"div",
-				id="paginationWrap"
-			).find(
-				"div", class_="midDiv inlineblock"
-			).find_all("a")
+				main_tasks.append(middle_pagination(middle_url="https://ru.investing.com/analysis/forex"))
 
-			main_tasks.append(asyncio.create_task(middle_pagination(middle_url="https://ru.investing.com/analysis/forex")))
+				for item in range(2, len(tag_a)):
+					link = f"https://ru.investing.com/{tag_a[item].get("href")}"
+					main_tasks.append(middle_pagination(middle_url=link))
+					
+	except RuntimeWarning as ex:
+		pass
 
-			for item in range(2, len(tag_a)):
-				link = f"https://ru.investing.com/{tag_a[item].get("href")}"
-				main_tasks.append(asyncio.create_task(middle_pagination(middle_url=link)))
-				
-
-	print("Main Pagination complete")
-	return main_tasks
+	finally:
+		return main_tasks
 
 async def run_script() -> None:
+	
+	# timex = time.time()
 	run_main = await main_pagination(main_url="https://ru.investing.com/analysis/forex/2")
-	asyncio.gather(*run_main)
-	print("Middle tasks -->")
+	print("Main Complete")
+	await asyncio.gather(*middle_tasks)
+	
+	
 
 if __name__ == "__main__":
 	asyncio.run(run_script())
