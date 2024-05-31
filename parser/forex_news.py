@@ -52,8 +52,9 @@ async def get_data(url: str):
 	except Exception as ex:
 		print(ex)
 
-middle_tasks = []
+
 async def middle_pagination(middle_url: str) -> None:
+	middle_tasks = []
 
 	try:
 		print("Middle start")
@@ -66,7 +67,13 @@ async def middle_pagination(middle_url: str) -> None:
 
 				for item in tag_div:
 					link = f"https://ru.investing.com/{item.find("a", class_="title").get("href")}"
+					#Blocking code but faster ->
 					middle_tasks.append(get_data(url=link))
+				#Best of the Best!!! -->
+				await asyncio.gather(*middle_tasks)
+
+					#Non-blocking code but slow ->
+					# await asyncio.create_task(get_data(url=link))
 				print("Middle complete")
 	except RuntimeError as ex:
 		pass
@@ -104,7 +111,9 @@ async def run_script() -> None:
 	# timex = time.time()
 	run_main = await main_pagination(main_url="https://ru.investing.com/analysis/forex/2")
 	print("Main Complete")
-	await asyncio.gather(*middle_tasks)
+	await asyncio.gather(*run_main)
+	# await asyncio.gather(*middle_tasks)
+	print(all_data)
 	
 	
 
